@@ -2,14 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart'; // kIsWeb 사용을 위해 추가
 import 'package:http/http.dart' as http;
-import 'package:html/dom.dart' as dom; // html 패키지에는 'dom'이라는 별명을 줍니다.
-import 'package:html/parser.dart' as html_parser;
 import 'dart:developer' as developer;
 import 'dart:convert'; // JSON 처리를 위해 추가
-import 'dart:typed_data'; // Uint8List 처리를 위해 추가
 import 'package:shared_preferences/shared_preferences.dart'; // 추가
 import 'package:fluttertoast/fluttertoast.dart'; // 토스트 패키지 임포트
-import 'package:flutter/services.dart'; // 앱 종료를 위한 시스템 채널
 
 // 1. 부모 데이터 (청사)
 final List<Map<String, String>> officeList = [
@@ -192,8 +188,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
     // 로딩 중일 때는 빈 화면이나 인디케이터 표시
-    if (isLoading)
+    if (isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
 
     return PopScope(
       canPop: false, // 시스템 뒤로가기로 화면이 나가는 것을 기본적으로 막음
@@ -261,7 +258,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: ElevatedButton(
                   onPressed: () async {
                     await _saveSettings(); // 이동 전 확실히 저장
-                    if (!mounted) return;
+                    if (!context.mounted) return;
                     Navigator.pushReplacement(
                       // 메인으로 쓰기 위해 pushReplacement 권장
                       context,
@@ -346,8 +343,8 @@ class _ImageDetailScreenState extends State<ImageDetailScreen> {
         final List<dynamic> data = jsonDecode(response.body);
         if (data.isNotEmpty) {
           final item = data[0];
-          final String file_path = item["fileStreCours"];
-          String fullImageUrl = "https://gbmo.go.kr" + file_path;
+          final String fileStreCours = item["fileStreCours"];
+          String fullImageUrl = "https://gbmo.go.kr$fileStreCours";
 
           // 🌐 --disable-web-security 사용 시 이미지도 직접 다운로드 시도
           // if (kIsWeb) {
@@ -386,8 +383,12 @@ class _ImageDetailScreenState extends State<ImageDetailScreen> {
           DeviceOrientation.landscapeLeft,
           DeviceOrientation.landscapeRight,
         ]);
+        // 가로모드 시 상태바 숨김 (Full Screen)
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
       } else {
         SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+        // 세로모드 시 상태바 표시
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
       }
     });
   }
@@ -396,6 +397,8 @@ class _ImageDetailScreenState extends State<ImageDetailScreen> {
   void dispose() {
     _transformationController.dispose();
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    // 앱 종료나 화면 이탈 시 상태바 복구
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
   }
 
@@ -450,29 +453,31 @@ class _ImageDetailScreenState extends State<ImageDetailScreen> {
         }
       },
       child: Scaffold(
-        appBar: AppBar(
-          title: Text(
-            displayTitle,
-            style: const TextStyle(fontSize: 16), // 글자가 길어질 수 있으니 크기 조절
-          ),
-          backgroundColor: Colors.black87,
-          foregroundColor: Colors.white,
-          automaticallyImplyLeading: false,
-          actions: [
-            // 식단표 화면에서 설정을 다시 바꾸고 싶을 수 있으므로 설정 버튼 추가
-            IconButton(
-              icon: const Icon(Icons.settings),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const SettingsScreen(),
+        appBar: isLandscape
+            ? null // 가로모드일 때 AppBar 숨김
+            : AppBar(
+                title: Text(
+                  displayTitle,
+                  style: const TextStyle(fontSize: 16), // 글자가 길어질 수 있으니 크기 조절
+                ),
+                backgroundColor: Colors.black87,
+                foregroundColor: Colors.white,
+                automaticallyImplyLeading: false,
+                actions: [
+                  // 식단표 화면에서 설정을 다시 바꾸고 싶을 수 있으므로 설정 버튼 추가
+                  IconButton(
+                    icon: const Icon(Icons.settings),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const SettingsScreen(),
+                        ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
-          ],
-        ),
+                ],
+              ),
         backgroundColor: Colors.black,
         body: FutureBuilder<Uint8List>(
           future: _imageFuture,
