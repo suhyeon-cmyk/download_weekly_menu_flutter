@@ -108,6 +108,7 @@ void main() async {
 
   runApp(
     MaterialApp(
+      title: '정부청사 식단표',
       // 저장된 데이터가 있으면 바로 식단표(ImageDetailScreen), 없으면 설정(SettingsScreen)
       home: hasSavedData
           ? ImageDetailScreen(

@@ -1,4 +1,4 @@
-package com.example.menu
+package com.cmyk.gov_cafeteria_helper
 
 import io.flutter.embedding.android.FlutterActivity
 
