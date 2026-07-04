@@ -313,15 +313,27 @@ class _ImageDetailScreenState extends State<ImageDetailScreen> {
     _imageFuture = fetchDietImage();
   }
 
+  String getProxyUrl(String originalUrlPath) {
+    if (kIsWeb) {
+      if (Uri.base.host == 'localhost' || Uri.base.host == '127.0.0.1') {
+        return 'https://gbmo.go.kr$originalUrlPath';
+      } else {
+        final baseUri = Uri.base;
+        return Uri(
+          scheme: baseUri.scheme,
+          host: baseUri.host,
+          port: baseUri.port == 80 || baseUri.port == 443 ? null : baseUri.port,
+          path: '/api/proxy',
+          queryParameters: {'path': originalUrlPath},
+        ).toString();
+      }
+    }
+    return 'https://gbmo.go.kr$originalUrlPath';
+  }
+
   Future<Uint8List> fetchDietImage() async {
-    String baseUrl = 'https://gbmo.go.kr/chungsa/dv/dietView/selectDietView.do';
-
-    // 🌐 Web 환경에서 --disable-web-security 플래그 사용 시 프록시 없이 직접 접속합니다.
-    // if (kIsWeb) {
-    //   baseUrl = 'https://corsproxy.io/?' + Uri.encodeComponent(baseUrl);
-    // }
-
-    final url = Uri.parse(baseUrl);
+    final urlString = getProxyUrl('/chungsa/dv/dietView/selectDietView.do');
+    final url = Uri.parse(urlString);
 
     try {
       // 1. POST 요청으로 JSON 데이터 가져오기 (Python 소스 참고)
@@ -345,12 +357,9 @@ class _ImageDetailScreenState extends State<ImageDetailScreen> {
         if (data.isNotEmpty) {
           final item = data[0];
           final String fileStreCours = item["fileStreCours"];
-          String fullImageUrl = "https://gbmo.go.kr$fileStreCours";
-
-          // 🌐 --disable-web-security 사용 시 이미지도 직접 다운로드 시도
-          // if (kIsWeb) {
-          //   fullImageUrl = 'https://corsproxy.io/?' + Uri.encodeComponent(fullImageUrl);
-          // }
+          
+          // 이미지 다운로드 URL도 프록시 처리
+          final fullImageUrl = getProxyUrl(fileStreCours);
 
           developer.log('최종 이미지 URL: $fullImageUrl', name: 'MealApp');
 
