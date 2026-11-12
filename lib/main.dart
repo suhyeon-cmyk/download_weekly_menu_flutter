@@ -6,6 +6,24 @@ import 'dart:developer' as developer;
 import 'dart:convert'; // JSON 처리를 위해 추가
 import 'package:shared_preferences/shared_preferences.dart'; // 추가
 import 'package:fluttertoast/fluttertoast.dart'; // 토스트 패키지 임포트
+import 'package:url_launcher/url_launcher.dart';
+import 'models/saved_menu.dart';
+import 'services/menu_storage_service.dart';
+import 'widgets/saved_menu_bar.dart';
+
+// 공식 출처 링크 연결을 위한 헬퍼 함수
+Future<void> _launchURL(String urlString) async {
+  final Uri url = Uri.parse(urlString);
+  if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+    Fluttertoast.showToast(
+      msg: '링크를 열 수 없습니다: $urlString',
+      toastLength: Toast.LENGTH_SHORT,
+      gravity: ToastGravity.BOTTOM,
+      backgroundColor: Colors.black87,
+      textColor: Colors.white,
+    );
+  }
+}
 
 // 1. 부모 데이터 (청사)
 final List<Map<String, String>> officeList = [
@@ -222,60 +240,146 @@ class _SettingsScreenState extends State<SettingsScreen> {
           title: const Text('식단표 설정'),
           automaticallyImplyLeading: false,
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: Column(
-            children: [
-              DropdownButton<String>(
-                isExpanded: true,
-                value: selectedOffice,
-                onChanged: (val) => _updateRestaurantList(val!),
-                items: officeList.map((office) {
-                  return DropdownMenuItem(
-                    value: office['id'],
-                    child: Text(office['name']!),
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 20),
-              DropdownButton<String>(
-                isExpanded: true,
-                value: selectedRestaurant,
-                onChanged: (String? val) {
-                  setState(() {
-                    selectedRestaurant = val!;
-                    _saveSettings();
-                  });
-                },
-                items: filteredRestaurants.map<DropdownMenuItem<String>>((res) {
-                  return DropdownMenuItem<String>(
-                    value: res['rstrntCode'].toString(),
-                    child: Text(res['rstrntName'].toString()),
-                  );
-                }).toList(),
-              ),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    await _saveSettings(); // 이동 전 확실히 저장
-                    if (!context.mounted) return;
-                    Navigator.pushReplacement(
-                      // 메인으로 쓰기 위해 pushReplacement 권장
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => ImageDetailScreen(
-                          officeId: selectedOffice,
-                          restaurantId: selectedRestaurant,
-                          isFirstScreen: false, // 설정에서 넘어온 것임
-                        ),
-                      ),
-                    );
-                  },
-                  child: const Text('식단표 확인'),
+        body: SingleChildScrollView(
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  '청사 선택',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
                 ),
-              ),
-            ],
+                DropdownButton<String>(
+                  isExpanded: true,
+                  value: selectedOffice,
+                  onChanged: (val) => _updateRestaurantList(val!),
+                  items: officeList.map((office) {
+                    return DropdownMenuItem(
+                      value: office['id'],
+                      child: Text(office['name']!),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 20),
+                const Text(
+                  '식당 선택',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                ),
+                DropdownButton<String>(
+                  isExpanded: true,
+                  value: selectedRestaurant,
+                  onChanged: (String? val) {
+                    setState(() {
+                      selectedRestaurant = val!;
+                      _saveSettings();
+                    });
+                  },
+                  items: filteredRestaurants.map<DropdownMenuItem<String>>((res) {
+                    return DropdownMenuItem<String>(
+                      value: res['rstrntCode'].toString(),
+                      child: Text(res['rstrntName'].toString()),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      await _saveSettings(); // 이동 전 확실히 저장
+                      if (!context.mounted) return;
+                      Navigator.pushReplacement(
+                        // 메인으로 쓰기 위해 pushReplacement 권장
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ImageDetailScreen(
+                            officeId: selectedOffice,
+                            restaurantId: selectedRestaurant,
+                            isFirstScreen: false, // 설정에서 넘어온 것임
+                          ),
+                        ),
+                      );
+                    },
+                    child: const Text('식단표 확인'),
+                  ),
+                ),
+                const SizedBox(height: 30),
+                Card(
+                  color: Colors.grey[100],
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                    side: BorderSide(color: Colors.grey[300]!),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: const [
+                            Icon(Icons.info_outline, size: 18, color: Colors.blueGrey),
+                            SizedBox(width: 6),
+                            Text(
+                              '정부 기관 비제휴 및 정보 출처 공지',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: Colors.black87,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          '1. 본 앱은 정부 기관을 대표하지 않으며, 정부와 어떠한 제휴나 협력 관계도 맺지 않은 민간 개발자의 개인 비공식 앱입니다.\n'
+                          '2. 본 앱에서 제공하는 식단 정보는 정부청사관리본부 공식 웹사이트의 공개 자료를 활용하여 제작되었습니다.',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.black54,
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        const Divider(height: 1),
+                        const SizedBox(height: 8),
+                        InkWell(
+                          onTap: () => _launchURL('https://gbmo.go.kr'),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Text(
+                                '공식 출처: 행정안전부 정부청사관리본부',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                              SizedBox(width: 4),
+                              Icon(Icons.open_in_new, size: 12, color: Colors.blue),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        InkWell(
+                          onTap: () => _launchURL('https://gbmo.go.kr'),
+                          child: const Text(
+                            'https://gbmo.go.kr',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey,
+                              decoration: TextDecoration.underline,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -306,11 +410,27 @@ class _ImageDetailScreenState extends State<ImageDetailScreen> {
   late Future<Uint8List> _imageFuture;
   DateTime? _lastPressedAt; // 마지막으로 뒤로가기 버튼을 누른 시간
 
+  Uint8List? _currentLiveImageBytes; // 실시간 다운로드된 이미지 바이트
+  List<SavedMenu> _savedMenus = []; // 저장된 식단표 목록
+  SavedMenu? _selectedSavedMenu; // 현재 선택된 저장 식단표 (null이면 실시간)
+  Uint8List? _selectedSavedImageBytes; // 현재 선택된 저장 식단표의 이미지 바이트
+  bool _isSaving = false; // 저장 진행 중 상태
+
   @override
   void initState() {
     super.initState();
     // 화면 진입 시 POST 요청 시작
     _imageFuture = fetchDietImage();
+    _loadSavedMenus();
+  }
+
+  Future<void> _loadSavedMenus() async {
+    final list = await MenuStorageService.instance.getSavedMenus();
+    if (mounted) {
+      setState(() {
+        _savedMenus = list;
+      });
+    }
   }
 
   String getProxyUrl(String originalUrlPath) {
@@ -340,7 +460,8 @@ class _ImageDetailScreenState extends State<ImageDetailScreen> {
       final response = await http.post(
         url,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Content-Type': 'application/json;charset=UTF-8',
           'Accept': 'application/json, text/javascript, */*; q=0.01',
         },
@@ -357,7 +478,7 @@ class _ImageDetailScreenState extends State<ImageDetailScreen> {
         if (data.isNotEmpty) {
           final item = data[0];
           final String fileStreCours = item["fileStreCours"];
-          
+
           // 이미지 다운로드 URL도 프록시 처리
           final fullImageUrl = getProxyUrl(fileStreCours);
 
@@ -367,7 +488,9 @@ class _ImageDetailScreenState extends State<ImageDetailScreen> {
           final imgResponse = await http.get(Uri.parse(fullImageUrl));
 
           if (imgResponse.statusCode == 200) {
-            return imgResponse.bodyBytes;
+            final bytes = imgResponse.bodyBytes;
+            _currentLiveImageBytes = bytes;
+            return bytes;
           } else {
             throw Exception('이미지 다운로드 실패 (Status: ${imgResponse.statusCode})');
           }
@@ -381,6 +504,140 @@ class _ImageDetailScreenState extends State<ImageDetailScreen> {
       developer.log('이미지 로딩 에러 발생', error: e, name: 'MealApp');
       throw Exception('식단표 로딩 실패: $e');
     }
+  }
+
+  Future<void> _saveCurrentMenu(String officeName, String restaurantName) async {
+    if (_currentLiveImageBytes == null) {
+      Fluttertoast.showToast(
+        msg: '식단표 이미지를 불러오는 중입니다. 잠시 후 다시 시도해주세요.',
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.black87,
+        textColor: Colors.white,
+      );
+      return;
+    }
+
+    if (_isSaving) return;
+
+    setState(() {
+      _isSaving = true;
+    });
+
+    try {
+      final saved = await MenuStorageService.instance.saveMenu(
+        officeId: widget.officeId,
+        officeName: officeName,
+        restaurantId: widget.restaurantId,
+        restaurantName: restaurantName,
+        imageBytes: _currentLiveImageBytes!,
+      );
+
+      await _loadSavedMenus();
+
+      Fluttertoast.showToast(
+        msg: '${saved.title} 저장되었습니다.',
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.black87,
+        textColor: Colors.white,
+      );
+    } catch (e) {
+      Fluttertoast.showToast(
+        msg: '식단표 저장 실패: $e',
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.redAccent,
+        textColor: Colors.white,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _selectSavedMenu(SavedMenu? menu) async {
+    _transformationController.value = Matrix4.identity();
+    if (menu == null) {
+      setState(() {
+        _selectedSavedMenu = null;
+        _selectedSavedImageBytes = null;
+      });
+      return;
+    }
+
+    final bytes = await MenuStorageService.instance.getImageBytes(menu);
+    if (mounted) {
+      setState(() {
+        _selectedSavedMenu = menu;
+        _selectedSavedImageBytes = bytes;
+      });
+    }
+  }
+
+  Future<void> _deleteSingleMenu(SavedMenu menu) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF2C2C2C),
+        title: const Text(
+          '식단표 삭제',
+          style: TextStyle(
+              color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          '\'${menu.title}\' 식단표를 삭제하시겠습니까?',
+          style: const TextStyle(color: Colors.white70, fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('취소', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await MenuStorageService.instance.deleteMenu(menu.id);
+      if (_selectedSavedMenu?.id == menu.id) {
+        await _selectSavedMenu(null); // 실시간 뷰로 복귀
+      }
+      await _loadSavedMenus();
+      Fluttertoast.showToast(
+        msg: '${menu.title} 삭제되었습니다.',
+        toastLength: Toast.LENGTH_SHORT,
+        gravity: ToastGravity.BOTTOM,
+        backgroundColor: Colors.black87,
+        textColor: Colors.white,
+      );
+    }
+  }
+
+  Future<void> _handleDeleteMenus(List<String> ids) async {
+    final count = await MenuStorageService.instance.deleteMenus(ids);
+    if (_selectedSavedMenu != null && ids.contains(_selectedSavedMenu!.id)) {
+      await _selectSavedMenu(null);
+    }
+    await _loadSavedMenus();
+    Fluttertoast.showToast(
+      msg: '$count개의 식단표가 삭제되었습니다.',
+      toastLength: Toast.LENGTH_SHORT,
+      gravity: ToastGravity.BOTTOM,
+      backgroundColor: Colors.black87,
+      textColor: Colors.white,
+    );
   }
 
   void _toggleRotation() {
@@ -415,28 +672,29 @@ class _ImageDetailScreenState extends State<ImageDetailScreen> {
   @override
   Widget build(BuildContext context) {
     // 1. 청사 이름 찾기
-    // officeList에서 id가 widget.officeId와 일치하는 항목을 찾습니다.
     final officeName = officeList.firstWhere(
       (off) => off['id'] == widget.officeId,
       orElse: () => {'name': '알 수 없는 청사'},
-    )['name'];
+    )['name']!;
 
     // 2. 식당 이름 찾기
-    // allRestaurants에서 rstrntCode가 widget.restaurantId와 일치하는 항목을 찾습니다.
     final restaurantName = allRestaurants.firstWhere(
       (res) =>
           (res['upperCode'] == widget.officeId &&
           res['rstrntCode'] == widget.restaurantId),
       orElse: () => {'rstrntName': '알 수 없는 식당'},
-    )['rstrntName'];
+    )['rstrntName']!;
 
     // 3. 최종 타이틀 문자열 조합
-    final displayTitle = "$officeName : $restaurantName";
+    final isViewingSaved = _selectedSavedMenu != null;
+    final displayTitle = isViewingSaved
+        ? '[저장됨] ${_selectedSavedMenu!.title}'
+        : "$officeName : $restaurantName";
 
     // 모바일 여부 확인 (Android, iOS)
-    final bool isMobile = !kIsWeb && 
-        (defaultTargetPlatform == TargetPlatform.android || 
-         defaultTargetPlatform == TargetPlatform.iOS);
+    final bool isMobile = !kIsWeb &&
+        (defaultTargetPlatform == TargetPlatform.android ||
+            defaultTargetPlatform == TargetPlatform.iOS);
 
     return PopScope(
       canPop: false, // 시스템 뒤로가기로 화면이 나가는 것을 기본적으로 막음
@@ -468,15 +726,120 @@ class _ImageDetailScreenState extends State<ImageDetailScreen> {
             : AppBar(
                 title: Text(
                   displayTitle,
-                  style: const TextStyle(fontSize: 16), // 글자가 길어질 수 있으니 크기 조절
+                  style: const TextStyle(fontSize: 15),
                 ),
                 backgroundColor: Colors.black87,
                 foregroundColor: Colors.white,
                 automaticallyImplyLeading: false,
                 actions: [
+                  if (isViewingSaved) ...[
+                    // 저장된 식단표 개별 삭제 버튼
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline,
+                          color: Colors.redAccent),
+                      tooltip: '현재 식단표 삭제',
+                      onPressed: () =>
+                          _deleteSingleMenu(_selectedSavedMenu!),
+                    ),
+                  ] else ...[
+                    // 실시간 식단표 저장 버튼
+                    IconButton(
+                      icon: _isSaving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.bookmark_add_outlined),
+                      tooltip: '식단표 저장',
+                      onPressed: _isSaving
+                          ? null
+                          : () => _saveCurrentMenu(officeName, restaurantName),
+                    ),
+                  ],
+                  // 실시간 식단표 새로고침 (저장된 식단표 열람 중에는 실시간 화면으로 복귀)
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    tooltip: isViewingSaved ? '실시간 식단표로 돌아가기' : '새로고침',
+                    onPressed: () {
+                      if (isViewingSaved) {
+                        _selectSavedMenu(null);
+                      }
+                      setState(() {
+                        _imageFuture = fetchDietImage();
+                      });
+                    },
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.info_outline),
+                    tooltip: '정보 출처 및 면책조항',
+                    onPressed: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('💡 정보 출처 및 면책 고지'),
+                          content: SingleChildScrollView(
+                            child: ListBody(
+                              children: [
+                                const Text(
+                                  '본 앱은 정부 기관을 대표하지 않는 민간 개발자의 개인 비공식 앱입니다.',
+                                  style: TextStyle(fontWeight: FontWeight.bold),
+                                ),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  '제공되는 모든 청사 식단 정보는 행정안전부 정부청사관리본부 공식 웹사이트의 공개 자료를 실시간으로 조회하여 표시합니다.',
+                                ),
+                                const SizedBox(height: 16),
+                                const Text(
+                                  '공식 출처 사이트:',
+                                  style: TextStyle(
+                                      color: Colors.grey, fontSize: 13),
+                                ),
+                                InkWell(
+                                  onTap: () {
+                                    Navigator.of(context).pop();
+                                    _launchURL('https://gbmo.go.kr');
+                                  },
+                                  child: const Padding(
+                                    padding:
+                                        EdgeInsets.symmetric(vertical: 4.0),
+                                    child: Text(
+                                      '정부청사관리본부 (https://gbmo.go.kr)',
+                                      style: TextStyle(
+                                        color: Colors.blue,
+                                        decoration: TextDecoration.underline,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('닫기'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                  // 모바일 화면 회전 버튼 (세로 모드에서는 상단 AppBar에 배치하여 하단 UI 가림 방지)
+                  if (isMobile)
+                    IconButton(
+                      icon: const Icon(Icons.screen_rotation),
+                      tooltip: '가로 화면으로 회전',
+                      onPressed: _toggleRotation,
+                    ),
                   // 식단표 화면에서 설정을 다시 바꾸고 싶을 수 있으므로 설정 버튼 추가
                   IconButton(
                     icon: const Icon(Icons.settings),
+                    tooltip: '청사/식당 변경',
                     onPressed: () {
                       Navigator.push(
                         context,
@@ -489,39 +852,101 @@ class _ImageDetailScreenState extends State<ImageDetailScreen> {
                 ],
               ),
         backgroundColor: Colors.black,
-        body: FutureBuilder<Uint8List>(
-          future: _imageFuture,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            } else if (snapshot.hasError) {
-              return Center(
-                child: Text(
-                  '${snapshot.error}',
-                  style: const TextStyle(color: Colors.white),
-                ),
-              );
-            } else if (snapshot.hasData) {
-              return InteractiveViewer(
-                transformationController: _transformationController,
-                minScale: 1.0,
-                maxScale: 5.0,
-                child: Center(
-                  child: Image.memory(
-                    snapshot.data!,
-                    fit: BoxFit.contain,
-                    width: double.infinity,
-                    height: double.infinity,
-                  ),
-                ),
-              );
-            } else {
-              return const Center(child: Text('데이터가 없습니다.'));
-            }
-          },
+        body: Column(
+          children: [
+            Expanded(
+              child: isViewingSaved
+                  ? (_selectedSavedImageBytes != null
+                      ? InteractiveViewer(
+                          transformationController: _transformationController,
+                          minScale: 1.0,
+                          maxScale: 5.0,
+                          child: Center(
+                            child: Image.memory(
+                              _selectedSavedImageBytes!,
+                              fit: BoxFit.contain,
+                              width: double.infinity,
+                              height: double.infinity,
+                            ),
+                          ),
+                        )
+                      : const Center(
+                          child: CircularProgressIndicator(color: Colors.white),
+                        ))
+                  : FutureBuilder<Uint8List>(
+                      future: _imageFuture,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return const Center(
+                              child: CircularProgressIndicator());
+                        } else if (snapshot.hasError) {
+                          return Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '${snapshot.error}',
+                                    style: const TextStyle(color: Colors.white),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  ElevatedButton.icon(
+                                    onPressed: () {
+                                      setState(() {
+                                        _imageFuture = fetchDietImage();
+                                      });
+                                    },
+                                    icon: const Icon(Icons.refresh),
+                                    label: const Text('다시 시도'),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        } else if (snapshot.hasData) {
+                          return InteractiveViewer(
+                            transformationController:
+                                _transformationController,
+                            minScale: 1.0,
+                            maxScale: 5.0,
+                            child: Center(
+                              child: Image.memory(
+                                snapshot.data!,
+                                fit: BoxFit.contain,
+                                width: double.infinity,
+                                height: double.infinity,
+                              ),
+                            ),
+                          );
+                        } else {
+                          return const Center(
+                            child: Text(
+                              '데이터가 없습니다.',
+                              style: TextStyle(color: Colors.white70),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+            ),
+            // 하단 저장된 식단표 가로 스크롤 바 (가로모드 시 전체화면을 위해 숨김)
+            if (!isLandscape)
+              SavedMenuBar(
+                savedMenus: _savedMenus,
+                selectedMenuId: _selectedSavedMenu?.id,
+                onSelectMenu: _selectSavedMenu,
+                onDeleteMenus: _handleDeleteMenus,
+              ),
+          ],
         ),
-        floatingActionButton: isMobile
-            ? FloatingActionButton(
+        floatingActionButton: (isMobile && isLandscape)
+            ? FloatingActionButton.small(
+                backgroundColor: Colors.black54,
+                foregroundColor: Colors.white,
+                tooltip: '세로 화면으로 복귀',
                 onPressed: _toggleRotation,
                 child: const Icon(Icons.screen_rotation),
               )
